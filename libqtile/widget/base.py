@@ -42,6 +42,7 @@ from libqtile.command import interface
 from libqtile.command.base import CommandError, CommandObject, expose_command
 from libqtile.lazy import LazyCall
 from libqtile.log_utils import logger
+from libqtile.utils import create_task
 
 if TYPE_CHECKING:
     from typing import Any
@@ -225,7 +226,7 @@ class _Widget(CommandObject, configurable.Configurable):
         self.drawer = bar.window.create_drawer(self.bar.width, self.bar.height)
         if not self.configured:
             self.qtile.call_soon(self.timer_setup)
-            self.qtile.call_soon(asyncio.create_task, self._config_async())
+            self.qtile.call_soon(create_task, self._config_async())
 
     async def _config_async(self):
         """
@@ -351,9 +352,9 @@ class _Widget(CommandObject, configurable.Configurable):
         self._remove_dead_timers()
         try:
             if asyncio.iscoroutinefunction(method):
-                asyncio.create_task(method(*method_args))
+                create_task(method(*method_args))
             elif asyncio.iscoroutine(method):
-                asyncio.create_task(method)
+                create_task(method)
             else:
                 method(*method_args)
         except:  # noqa: E722
@@ -457,6 +458,12 @@ class _TextBox(_Widget):
             "Whether text should scroll completely away (True) or stop when the end of the text is shown (False)",
         ),
         ("scroll_hide", False, "Whether the widget should hide when scrolling has finished"),
+        (
+            "scroll_fixed_width",
+            False,
+            "When ``scroll=True`` the ``width`` parameter is a maximum width and, when text is shorter than this, the widget will resize. "
+            "Setting ``scroll_fixed_width=True`` will force the widget to have a fixed width, regardless of the size of the text.",
+        ),
     ]  # type: list[tuple[str, Any, str]]
 
     def __init__(self, text=" ", width=bar.CALCULATED, **config):
@@ -557,7 +564,11 @@ class _TextBox(_Widget):
             self._is_scrolling = True
             self._should_scroll = True
         else:
-            self.length_type = bar.CALCULATED
+            if self.scroll_fixed_width:
+                self.length_type = bar.STATIC
+                self.length = self._scroll_width
+            else:
+                self.length_type = bar.CALCULATED
             self._should_scroll = False
 
     def calculate_length(self):
